@@ -8,3 +8,4 @@ Detecting Concealed Weapons:
 - https://ieeexplore.ieee.org/document/1406480/
 - https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4732080/
 - http://cs231n.stanford.edu/reports/2017/pdfs/716.pdf
+- ["Automatic Handgun Detection Alarm in Videos Using Deep Learning"](https://arxiv.org/pdf/1702.05147.pdf)
