@@ -1,5 +1,5 @@
-https://www.kaggle.com/c/passenger-screening-algorithm-challenge
-Top solutions to Passenger Screening Kaggle Challenge:
+Passenger Screening Kaggle Challenge:
+- https://www.kaggle.com/c/passenger-screening-algorithm-challenge
 - https://github.com/ShayanPersonal/Kaggle-Passenger-Screening-Challenge-Solution
 - https://github.com/jamespeterthornton/DHS
 
