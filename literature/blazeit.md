@@ -5,4 +5,6 @@
 	- relatively rare events (e.g., events of many birds at a feeder)
 
 - FrameQL
-	- SQL-like querying language
+	- SQL-like querying language for complex visual queries over video
+	- Optimizations for three common classes of queries: aggregation, scrubbing, and content-based selection
+	
