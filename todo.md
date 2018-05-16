@@ -20,7 +20,7 @@ cd ffmpeg-4.0
 
 make
 ```
-
+ 
 ### 2. Divide video into smaller ~5s clips
 - In a separate, empty directory called `cs231n/jackson-clips`, run: 
  
