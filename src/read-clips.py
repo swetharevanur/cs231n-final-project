@@ -1,3 +1,5 @@
+# Reads in stream of 5s clips from jackson-clips directory
+
 import swag 
 import cv2
 import numpy as np
@@ -13,6 +15,8 @@ while True:
 
 	if ret == True: # ret = False indicates EOF
 		cv2.putText(frame, "Frame " + str(frameCount), (30,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255));
+		frame = cv2.resize(frame, (960, 540))
+
 		cv2.imshow('frame', frame)
 		frameCount += 1
 		
