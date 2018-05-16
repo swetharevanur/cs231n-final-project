@@ -1,7 +1,7 @@
 # Task:
 - Prior work focuses on querying videos for entities across multiple frames
 - What we want to do: query videos for entities performing actions across multiple frames
-
+ 
 # To-Do's:
 ### 1. Download data and set up env
 - Create conda virtual environment for project
