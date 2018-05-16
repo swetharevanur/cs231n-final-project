@@ -2,10 +2,8 @@
 
 import swag 
 import cv2
-import numpy as np
 
 fname = '../../jackson-clips'
-
 video = swag.VideoCapture(fname)
 
 frameCount = 0
