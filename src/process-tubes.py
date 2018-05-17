@@ -21,6 +21,14 @@ for obj_id in obj_ids[0:1]:
 # perform spatial max pooling
 tubes[0].spatial_pooling()
 
+# perform temporal max pooling
+tubes[0].temporal_pooling()
+
+# while True:
+# 	cv2.imshow('frame', tubes[0].summary_frame)
+# 	if cv2.waitKey(1) == ord('q'): break
+# cv2.destroyAllWindows()
+
 # displaying ROIs
 tubes[0].display()
 

@@ -8,4 +8,5 @@ data = pd.read_csv(fname, header = 0)
 
 print data.shape
 print data.frame.nunique()
+print data.ind.nunique()
 print data.head(5)

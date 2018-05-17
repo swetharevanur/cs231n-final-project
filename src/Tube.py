@@ -3,12 +3,14 @@ import swag
 import cv2
 from operator import itemgetter
 import math
+import numpy as np
 
 class Tube():
 	def __init__(self, obj_id):
 		self.id = obj_id
 		self.rois = [] # list of regions of interest
 		self.pooled_rois = [] # RoIs after spatial max pooling across all frames
+		self.summary_frame = None
 
 	def populate(self, bb):
 		frames_of_interest = bb.loc[bb['ind'] == self.id]
@@ -43,7 +45,6 @@ class Tube():
 
 		for frame in self.rois:
 			frame_height, frame_width, frame_channel = frame.shape
-			print(frame_height, frame_width)
 
 			# zero pad each frame so that they all have height/width that is a multiple of new_dim
 			# multiple must be larger than frame dims
@@ -63,21 +64,24 @@ class Tube():
 			H, W, C = padded_frame.shape
 
 			# apply vectorized spatial max pooling
-			same_size = pool_kernel_dim == stride
-			tiles = H % pool_kernel_dim == 0 and W % pool_kernel_dim == 0
-			if same_size and tiles:
-				padded_frame = padded_frame.reshape(1, C, H // pool_kernel_dim, pool_kernel_dim,
-						   W // pool_kernel_dim, pool_kernel_dim)
-				padded_frame = padded_frame.max(axis = 3).max(axis = 4)
-			else:
-				assert "Incorrect kernel size or stride for spatial max pooling"
+			pool_kernel_H = H // new_dim
+			pool_kernel_W = W // new_dim
 
-			print(padded_frame.shape[0], padded_frame.shape[1])
+			padded_frame = padded_frame.reshape(1, H // pool_kernel_H, pool_kernel_H,
+					   W // pool_kernel_W, pool_kernel_W, C)
+			padded_frame = padded_frame.max(axis = 2).max(axis = 3)
+			padded_frame = padded_frame.squeeze(axis = 0)
+
 			self.pooled_rois.append(padded_frame)
 
 
 	def temporal_pooling(self):
-		return
+		# stacks spatially max pooled frames
+		temp_pooled_frame = np.stack(self.pooled_rois, axis = 0)
+		t, x, y, c = temp_pooled_frame.shape
+
+		temp_pooled_frame = temp_pooled_frame.max(axis = 0)
+		self.summary_frame = temp_pooled_frame
 
 
 
