@@ -44,9 +44,9 @@ class AutoEncoder(nn.Module):
 		return out, code
 	
 	def encode(self, images):
-		code = F.max_pool2d(images, 2)
-		code = F.max_pool2d(code, 2)
-		code = self.enc_cnn_1(code)
+		#code = F.max_pool2d(images, 2)
+		#code = F.max_pool2d(code, 2)
+		code = self.enc_cnn_1(images)
 		code = F.selu(F.max_pool2d(code, 2))
 		
 		code = self.enc_cnn_2(code)
@@ -60,27 +60,32 @@ class AutoEncoder(nn.Module):
 	def decode(self, code):
 		out = F.selu(self.dec_linear_1(code))
 		out = F.sigmoid(self.dec_linear_2(out))
-		out = out.view([code.size(0), NUM_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH])
+		out = out.view([code.size(0), NUM_CHANNELS, IMAGE_WIDTH, IMAGE_HEIGHT])
 		return out
 	
 
-IMAGE_WIDTH = 1920
-IMAGE_HEIGHT = 1080
+IMAGE_WIDTH = 480 # 1920
+IMAGE_HEIGHT = 270 # 1080
 NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
 # Hyperparameters
 code_size = 100
 num_epochs = 10
-batch_size = 1
+batch_size = 128
 lr = 0.002
 optimizer_cls = optim.Adam
 
 # Load data
-train_data = VideoDataset.VideoDataset(fname = '../../jackson-clips', transform=transforms.ToTensor())
+#transforms.Compose([
+#transforms.Resize(size=(270, 480)),
+#transforms.ToTensor()
+#])
+train_data = VideoDataset.VideoDataset(fname =
+'../../jackson-clips',transform=[transforms.ToTensor()])
 print("About to train_loader")
 train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size,
-num_workers = 0, drop_last=True)
+num_workers = 8, drop_last=True)
 # train_data = datasets.MNIST('~/data/mnist/', train=True , transform=transforms.ToTensor(), download = True)
 # test_data  = datasets.MNIST('~/data/mnist/', train=False, transform=transforms.ToTensor())
 # train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers=4, drop_last=True)
@@ -89,7 +94,7 @@ num_workers = 0, drop_last=True)
 autoencoder = AutoEncoder(code_size)
 loss_fn = nn.BCELoss()
 optimizer = optimizer_cls(autoencoder.parameters(), lr=lr)
-torch.save(autoencoder, 'models/autoencoder.pt')
+# torch.save(autoencoder, 'models/autoencoder.pt')
 
 autoencoder = autoencoder.cuda()
 # Training loop

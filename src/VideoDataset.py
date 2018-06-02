@@ -19,8 +19,12 @@ class VideoDataset(Dataset):
 		video.set(1, index % self.frame_per_clip)
 		ret, frame = video.read()
 		
+
 		if self.transform:
-			frame = self.transform(frame)
+			#print(frame.shape)
+			frame = cv2.resize(frame, dsize = (270, 480), interpolation = cv2.INTER_CUBIC)
+			for tform in self.transform:
+				frame = tform(frame)
 
 		return (frame, 'train') # ignore labels!
 
