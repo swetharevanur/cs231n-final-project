@@ -9,3 +9,5 @@ def readSpecificFrame(frameNum, frameCache):
 	ret, frame = video.read()
 
 	frameCache.append(frame)
+
+readSpecificFrame(1, {})
