@@ -58,14 +58,16 @@ IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
 # Hyperparameters
 code_size = 1000
-num_epochs = 5
-batch_size = 4 #128
+num_epochs = 1
+batch_size = 4
 lr = 0.002
 optimizer_cls = optim.Adam
 
 # Load data
 train_data = VideoDataset.VideoDataset(fname = '../../jackson-clips', transform=transforms.ToTensor())
-train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers=1, drop_last=True)
+print("About to train_loader")
+train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size,
+num_workers = 0, drop_last=True)
 # train_data = datasets.MNIST('~/data/mnist/', train=True , transform=transforms.ToTensor(), download = True)
 # test_data  = datasets.MNIST('~/data/mnist/', train=False, transform=transforms.ToTensor())
 # train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers=4, drop_last=True)
