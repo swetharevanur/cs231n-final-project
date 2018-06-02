@@ -8,7 +8,7 @@ class VideoDataset(Dataset):
 	def __init__(self, fname, transform):
 		self.fname = fname
 		self.frame_per_clip = 150
-		self.num_clips = 6490
+		self.num_clips = 10 # 6490
 		self.transform = transform
 
 	def __getitem__(self, index):

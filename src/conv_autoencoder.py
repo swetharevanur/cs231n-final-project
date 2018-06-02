@@ -19,7 +19,7 @@ class AutoEncoder(nn.Module):
 		# Encoder specification
 		self.enc_cnn_1 = nn.Conv2d(NUM_CHANNELS, 10, kernel_size=5)
 		self.enc_cnn_2 = nn.Conv2d(10, 20, kernel_size=5)
-		self.enc_linear_1 = nn.Linear(477 * 267 * 20, self.code_size*2)
+		self.enc_linear_1 = nn.Linear(117 * 64 * 20, self.code_size*2)
 		self.enc_linear_2 = nn.Linear(self.code_size*2, self.code_size)
 		
 		# Decoder specification
@@ -33,7 +33,9 @@ class AutoEncoder(nn.Module):
 		return out, code
 	
 	def encode(self, images):
-		code = self.enc_cnn_1(images)
+		code = F.max_pool2d(images, 2)
+		code = F.max_pool2d(code, 2)
+		code = self.enc_cnn_1(code)
 		code = F.selu(F.max_pool2d(code, 2))
 		
 		code = self.enc_cnn_2(code)
@@ -57,7 +59,7 @@ NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
 # Hyperparameters
-code_size = 1000
+code_size = 100
 num_epochs = 1
 batch_size = 4
 lr = 0.002
@@ -67,7 +69,7 @@ optimizer_cls = optim.Adam
 train_data = VideoDataset.VideoDataset(fname = '../../jackson-clips', transform=transforms.ToTensor())
 print("About to train_loader")
 train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size,
-num_workers = 0, drop_last=True)
+num_workers = 1, drop_last=True)
 # train_data = datasets.MNIST('~/data/mnist/', train=True , transform=transforms.ToTensor(), download = True)
 # test_data  = datasets.MNIST('~/data/mnist/', train=False, transform=transforms.ToTensor())
 # train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers=4, drop_last=True)
@@ -82,12 +84,13 @@ for epoch in range(num_epochs):
 	print("Epoch %d" % epoch)
 
 	for i, (images, _) in enumerate(train_loader): # Ignore image labels
+		print(i)
 		out, code = autoencoder(images)
-		
 		optimizer.zero_grad()
 		loss = loss_fn(out, images)
 		loss.backward()
 		optimizer.step()
+		print("Loop Loss = %.3f" % loss.data[0])
 		
 	print("Loss = %.3f" % loss.data[0])
 
