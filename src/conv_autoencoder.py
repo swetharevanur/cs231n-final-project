@@ -10,6 +10,17 @@ import torchvision
 from torchvision import datasets, transforms
 import VideoDataset
 
+# Using gpu
+USE_GPU = True
+dtype = torch.float32
+
+if USE_GPU and torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+# device = torch.device('cpu')
+
+print('using device:', device)
 
 class AutoEncoder(nn.Module):
 	def __init__(self, code_size):
@@ -60,8 +71,8 @@ IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
 # Hyperparameters
 code_size = 100
-num_epochs = 1
-batch_size = 4
+num_epochs = 10
+batch_size = 1
 lr = 0.002
 optimizer_cls = optim.Adam
 
@@ -69,7 +80,7 @@ optimizer_cls = optim.Adam
 train_data = VideoDataset.VideoDataset(fname = '../../jackson-clips', transform=transforms.ToTensor())
 print("About to train_loader")
 train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size,
-num_workers = 1, drop_last=True)
+num_workers = 0, drop_last=True)
 # train_data = datasets.MNIST('~/data/mnist/', train=True , transform=transforms.ToTensor(), download = True)
 # test_data  = datasets.MNIST('~/data/mnist/', train=False, transform=transforms.ToTensor())
 # train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers=4, drop_last=True)
@@ -78,14 +89,19 @@ num_workers = 1, drop_last=True)
 autoencoder = AutoEncoder(code_size)
 loss_fn = nn.BCELoss()
 optimizer = optimizer_cls(autoencoder.parameters(), lr=lr)
+torch.save(autoencoder, 'models/autoencoder.pt')
 
+autoencoder = autoencoder.cuda()
 # Training loop
 for epoch in range(num_epochs):
 	print("Epoch %d" % epoch)
 
 	for i, (images, _) in enumerate(train_loader): # Ignore image labels
 		print(i)
+		images = images.to(device = device, dtype = dtype)
 		out, code = autoencoder(images)
+		#out = out.to(device = device, dtype = dtype)
+		#code = code.to(device = device, dtype = dtype)
 		optimizer.zero_grad()
 		loss = loss_fn(out, images)
 		loss.backward()
@@ -95,9 +111,12 @@ for epoch in range(num_epochs):
 	print("Loss = %.3f" % loss.data[0])
 
 # Try reconstructing on test data
-test_image = random.choice(train_data)
-test_image = Variable(test_image.view([1, 1, IMAGE_WIDTH, IMAGE_HEIGHT]))
-test_reconst, _ = autoencoder(test_image)
+# test_image = random.choice(train_data)
+# test_image = Variable(test_image.view([1, 1, IMAGE_WIDTH, IMAGE_HEIGHT]))
+# test_reconst, _ = autoencoder(test_image)
 
-torchvision.utils.save_image(test_image.data, 'orig.png')
-torchvision.utils.save_image(test_reconst.data, 'reconst.png')
+# torchvision.utils.save_image(test_image.data, 'orig.png')
+# torchvision.utils.save_image(test_reconst.data, 'reconst.png')
+
+torch.save(autoencoder, 'models/autoencoder.pt')
+
