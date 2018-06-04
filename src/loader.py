@@ -79,14 +79,13 @@ class DataLoader(object):
 	def __init__(self):
 		self.codes = [] # list of encoded images
 		self.labels = [] # associated labels
-		self.code_size = 50 # size of encoded image from autoencoder
 
 	def load_data(self, data_path = '../data/'):
 		labels_fname = 'jackson-town-square-2017-12-14.csv'
 
 		# load model
 		model_fname = 'models/autoencoder.pth'
-		autoencoder = AutoEncoder(code_size = self.code_size)
+		autoencoder = AutoEncoder()
 		autoencoder = torch.load(model_fname)
 		
 		# get unique frames with vehicles

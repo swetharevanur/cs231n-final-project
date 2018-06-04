@@ -6,8 +6,8 @@ import pandas as pd
 import math
 
 def resize_frame(roi):
-	# pad ROI to the nearest multiple of 100
-	new_dim = 100
+	# pad ROI to the nearest multiple of 224
+	new_dim = 224
 	roi_height, roi_width, roi_channel = roi.shape
 	vert_pad = (roi_height // new_dim + 1)*new_dim - roi_height
 	horiz_pad = (roi_width // new_dim + 1)*new_dim - roi_width
@@ -41,7 +41,7 @@ class VideoDataset(Dataset):
 		self.bb = pd.read_csv(self.bb_fname, header = 0)
 		self.bb = self.bb.drop_duplicates(subset = 'frame') # for ConvAE training purposes, only keep first BB for frame
 		self.frame_per_clip = 150
-		self.num_clips = 10 # 6490
+		self.num_clips = 30 # 6490
 		self.transform = transform
 
 	def extract_frame(self, index):
@@ -74,7 +74,7 @@ class VideoDataset(Dataset):
 		return (padded_roi, 'train') # ignore labels!
 
 	def __len__(self):
-		return 128*8
+		return self.frame_per_clip*self.num_clips
 		# return self.bb['frame'].nunique()# number of frames in video with vehicles in them
 		# self.frame_per_clip * self.num_clips # number of frames in video
 
