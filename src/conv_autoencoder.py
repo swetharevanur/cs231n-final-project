@@ -61,26 +61,13 @@ for epoch in range(num_epochs):
 		print(i)
 		images = images.to(device = device, dtype = dtype)
 		out, code = autoencoder(images)
-		#out = out.to(device = device, dtype = dtype)
-		#code = code.to(device = device, dtype = dtype)
 		optimizer.zero_grad()
 		loss = loss_fn(out, images)
-		# print(out)
-		# print(images)
 		loss.backward()
 		optimizer.step()
 		print("Loop Loss = %.3f" % loss.data[0])
 		
 	print("Loss = %.3f" % loss.data[0])
 
-# Try reconstructing on test data
-# test_image = random.choice(train_data)
-# test_image = Variable(test_image.view([1, 1, IMAGE_WIDTH, IMAGE_HEIGHT]))
-# test_reconst, _ = autoencoder(test_image)
-
-# torchvision.utils.save_image(test_image.data, 'orig.png')
-# torchvision.utils.save_image(test_reconst.data, 'reconst.png')
-
-torch.save(autoencoder.state_dict(), 'models/autoencoder_params.pth')
 torch.save(autoencoder, 'models/autoencoder.pth')
 

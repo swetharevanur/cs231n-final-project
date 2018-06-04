@@ -6,8 +6,8 @@ import scipy
 import csv
 import sklearn.cross_validation
 import pandas as pd
-# from conv_autoencoder import AutoEncoder
 import random
+from random import shuffle
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -25,7 +25,6 @@ from get_frames import getVehicleFrames
 
 USE_GPU = True
 dtype = torch.float32
-
 if USE_GPU and torch.cuda.is_available():
     device = torch.device('cuda')
 else:
@@ -37,16 +36,16 @@ def parse_file(filename):
 		framereader = csv.reader(f, delimiter = ',')
 		next(framereader)
 		for frame in framereader:
-			frameLabels.append(frame[1]) # Frame[0] is framenumber, frame[1] is label
+			frameLabels.append(frame[1]) # frame[0] is frame number, frame[1] is label
 	return frameLabels
 
 def split_data(X, y):
 	np.random.seed(1234)
 	num_sample = np.shape(X)[0]
+
+	# split total into train/test (80/20)
 	num_test = num_sample // 5
 	num_train = num_sample - num_test
-	# print(num_sample)
-	# print(num_test)
 	
 	X_test = X[0:num_test]
 	X_train = X[num_test:]
@@ -54,22 +53,21 @@ def split_data(X, y):
 	y_test = y[0:num_test]
 	y_train = y[num_test:]
 
-	# split train/val (80/20)
-	num_val = num_train // 5
+	# split train into train/val (20/80 because meanings swapped in Reef)
+	num_val = 4 * num_train // 5
 
 	train_inds = np.arange(num_train)
 	random.shuffle(train_inds)
-	val_inds, train_inds = train_inds[0:num_val], train_inds[num_val]
+	val_inds, train_inds = train_inds[0:num_val], train_inds[num_val:]
 
 	X_val = X_train[val_inds]
 	y_val = y_train[val_inds]
 	X_tr = X_train[train_inds]
 	y_tr = y_train[train_inds]
 
-	print(type(y_train))
-	print(type(X_train))
-
-	
+	X_tr = torch.squeeze(X_tr, 1)
+	X_val = torch.squeeze(X_val, 1)
+	X_test = torch.squeeze(X_test, 1)
 
 	return np.array(X_tr.detach()), np.array(X_val.detach()), np.array(X_test.detach()), \
 		np.array(y_tr), np.array(y_val), np.array(y_test)
@@ -78,82 +76,89 @@ def split_data(X, y):
 class DataLoader(object):
 	""" A class to load in appropriate numpy arrays
 	"""
-
 	def __init__(self):
 		self.codes = [] # list of encoded images
-		self.labels = []
-
-	def prune_features(self, val_primitive_matrix, train_primitive_matrix, thresh=0.01):
-		val_sum = np.sum(np.abs(val_primitive_matrix),axis=0)
-		train_sum = np.sum(np.abs(train_primitive_matrix),axis=0)
-
-		#Only select the indices that fire more than 1% for both datasets
-		train_idx = np.where((train_sum >= thresh*np.shape(train_primitive_matrix)[0]))[0]
-		val_idx = np.where((val_sum >= thresh*np.shape(val_primitive_matrix)[0]))[0]
-		common_idx = list(set(train_idx) & set(val_idx))
-
-		return common_idx
+		self.labels = [] # associated labels
+		self.code_size = 50 # size of encoded image from autoencoder
 
 	def load_data(self, data_path = '../data/'):
-		fname1 = 'jackson-town-square-2017-12-14.csv'
+		labels_fname = 'jackson-town-square-2017-12-14.csv'
 
-		# Load model
-		modelName = 'models/autoencoder.pth'
-		autoencoder = AutoEncoder(code_size = 50)
-		# autoencoder.load_state_dict(torch.load(modelName))
-		autoencoder = torch.load(modelName)
-		# crop the frames
-		vehicleFrames = getVehicleFrames(data_path + fname1)[0]
-		frameNumsToLoad = vehicleFrames[0:10]
+		# load model
+		model_fname = 'models/autoencoder.pth'
+		autoencoder = AutoEncoder(code_size = self.code_size)
+		autoencoder = torch.load(model_fname)
+		
+		# get unique frames with vehicles
+		vehicleFrames = getVehicleFrames(data_path + labels_fname)[0]
+		shuffle(vehicleFrames)
 
-		bb = pd.read_csv(data_path + fname1, header = 0)
+		bb = pd.read_csv(data_path + labels_fname, header = 0)
 		bb_dims = ['xmin', 'ymin', 'xmax', 'ymax']
 
-		fname2 = '../../jackson-clips'
-		video = swag.VideoCapture(fname2)
+		video_fname = '../../jackson-clips'
+		video = swag.VideoCapture(video_fname)
 
-		for frameNum in frameNumsToLoad:
-			x_min, y_min, x_max, y_max = [bb.loc[bb['frame'] == frameNum][dim].tolist()[0] for dim in bb_dims]
+		carCount = 0
+		truckCount = 0
+		margin = 5
+		numFramesToLoad = 1000
+		numFramesLoaded = 0
 
+		for frameIter in range(len(vehicleFrames)):
+			frameNum = vehicleFrames[frameIter] # frame number as it appears in BB dataset
+
+			# force class balancing
+			vehicleType = bb.loc[bb['frame'] == frameNum]['object_name'].to_string()
+			vehicleType = vehicleType.split(' ')[-1]
+			if vehicleType == 'car':
+				if carCount - truckCount > margin: continue # more cars than trucks, so skip
+				carCount += 1
+			if vehicleType == 'truck':
+				if truckCount - carCount > margin: continue # more trucks than cars, so skip
+				truckCount += 1
+			
 			# read in frame of interest
 			video.set(1, frameNum)
 			ret, frame = video.read()
 			if ret == False: break # EOF reached
-
 			# crop frame
+			x_min, y_min, x_max, y_max = [bb.loc[bb['frame'] == frameNum][dim].tolist()[0] for dim in bb_dims]
 			frame = frame[int(y_min):int(y_max), int(x_min):int(x_max), :]
-
 			# resize frame
 			frame = VideoDataset.resize_frame(frame)
 
-			# Use autoencoder to do 3-d to 1-d
-			# ... but first convert to tensor that autoencoder accepts
+			# use autoencoder to generate 1D code from 3D image
 			transform = [transforms.ToTensor()]
-			for tform in transform:
-			    frameTensor = tform(frame)
+			for tform in transform: # convert to tensor
+				frameTensor = tform(frame)
 			frameTensor = frameTensor.unsqueeze_(0)
 			frameTensor = frameTensor.to(device = device, dtype = dtype)
 			code = autoencoder.encode(frameTensor)
-
 			self.codes.append(code)	
+
 			# get labels associated with each frame
-			self.labels.append(bb.iloc[vehicleFrames[frameNum]][1] == 'car')
+			self.labels.append((vehicleType == 'car') - (vehicleType == 'truck')) # -1 is truck, 1 is car
 
-			if frameNum%10 == 0:
-				print(frameNum)
+			numFramesLoaded += 1
+			if numFramesLoaded % 20 == 0:
+				print(numFramesLoaded, "frames successfully loaded out of", numFramesToLoad)	
+			if numFramesLoaded >= numFramesToLoad: break
 
+		# report vehicle statistics for class balancing
+		print("\nCar count:", carCount)
+		print("Truck count:", truckCount)
+		print(carCount - truckCount, "more cars than trucks.") 
 
+		# convert to encoded images and labels to tensors
 		codeMatrix = torch.stack(self.codes, 0)
 		labelTensor = torch.Tensor(self.labels)
-
 
 		# split dataset into train, val, test
 		train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
 			train_ground, val_ground, test_ground = split_data(codeMatrix, labelTensor)
-
-		#Prune Feature Space
-		common_idx = self.prune_features(val_primitive_matrix, train_primitive_matrix)
-		return train_primitive_matrix[:,common_idx], val_primitive_matrix[:,common_idx], test_primitive_matrix[:,common_idx], \
+	
+		return train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
 			np.array(train_ground), np.array(val_ground), np.array(test_ground)
 
 

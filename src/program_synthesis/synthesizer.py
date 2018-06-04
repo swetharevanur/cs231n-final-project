@@ -28,7 +28,7 @@ class Synthesizer(object):
 
         max_cardinality: max number of features each heuristic operates over 
         """
-        primitive_idx = range(self.p)
+        primitive_idx = list(range(self.p))
         feature_combinations = []
 
         for comb in itertools.combinations(primitive_idx, cardinality):
@@ -73,7 +73,7 @@ class Synthesizer(object):
         #have to make a dictionary?? or feature combinations here? or list of arrays?
         feature_combinations_final = []
         heuristics_final = []
-        for cardinality in range(1, max_cardinality+1):
+        for cardinality in list(range(1, max_cardinality+1)):
             feature_combinations = self.generate_feature_combinations(cardinality)
 
             heuristics = []

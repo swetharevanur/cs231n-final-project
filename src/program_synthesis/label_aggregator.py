@@ -92,10 +92,10 @@ class LabelAggregator(object):
         # Set up stuff
         N, M   = X.shape
         if verbose:
-            print "="*80
-            print "Training marginals (!= 0.5):\t%s" % N
-            print "Features:\t\t\t%s" % M
-            print "="*80
+            print("="*80)
+            print("Training marginals (!= 0.5):\t%s" % N)
+            print("Features:\t\t\t%s" % M)
+            print("="*80)
         Xt     = X.transpose()
         Xt_abs = np.abs(Xt)
         w0     = w0 if w0 is not None else np.ones(M)
@@ -108,7 +108,7 @@ class LabelAggregator(object):
 
         # Gradient descent
         if verbose:
-            print "Begin training for rate={}, mu={}".format(rate, mu)
+            print("Begin training for rate={}, mu={}".format(rate, mu))
         for step in range(n_iter):
 
             # Get the expected LF accuracy
@@ -128,10 +128,10 @@ class LabelAggregator(object):
             wn     = np.linalg.norm(w, ord=2)
             g_size = np.linalg.norm(g, ord=2)
             if step % 250 == 0 and verbose:
-                print "\tLearning epoch = {}\tGradient mag. = {:.6f}".format(step, g_size)
+                print("\tLearning epoch = {}\tGradient mag. = {:.6f}".format(step, g_size))
             if (wn < 1e-12 or g_size / wn < tol) and step >= 10:
                 if verbose:
-                    print "SGD converged for mu={} after {} steps".format(mu, step)
+                    print("SGD converged for mu={} after {} steps".format(mu, step))
                 break
 
             # Update weights
@@ -152,7 +152,7 @@ class LabelAggregator(object):
         # SGD did not converge
         else:
             if verbose:
-                print "Final gradient magnitude for rate={}, mu={}: {:.3f}".format(rate, mu, g_size)
+                print("Final gradient magnitude for rate={}, mu={}: {:.3f}".format(rate, mu, g_size))
 
         # Return learned weights
         self.w = w
