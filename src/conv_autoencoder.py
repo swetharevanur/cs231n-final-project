@@ -29,8 +29,8 @@ IMAGE_HEIGHT = 224 # 1080
 NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
-results_fname = 'models/results/conv_autoencoder_experiments.txt'
-os.remove(results_fname)
+results_fname = 'models/results/autoencoder_experiments.txt'
+# os.remove(results_fname)
 
 # load data
 def load(fname = '../../jackson-clips'):
@@ -61,6 +61,7 @@ def train_model(autoencoder, loss_fn, optimizer, num_epochs):
 			loss = loss_fn(out, images)
 			loss.backward()
 			optimizer.step()
+		print("Epoch Loss = %.3f" % loss.data[0])
 	print("Loss = %.3f" % loss.data[0])	
 	return loss.data[0]
 
@@ -77,7 +78,7 @@ def tune(num_epochs_arr, lr_arr):
 			print('\nLearning Rate:', lr)
 			loss = train_model(autoencoder, loss_fn, optimizer, num_epochs)
 			# write to a file too
-			with open(results_fname, 'w') as text_file:
+			with open(results_fname, 'a') as text_file:
 				text_file.write("\nLearning Rate = %.3f" % lr)
 				text_file.write("\nLoss = %.3f" % loss)
 
@@ -86,10 +87,13 @@ def tune(num_epochs_arr, lr_arr):
 				running_best_model = autoencoder
 				running_best_params = {'num_epochs': num_epochs, 'lr': lr}
 
+			torch.save(autoencoder, 'model/autoencoder_' + lr + '.pth')
+			del autoencoder
+
 	print("\nBest Model Loss = %.3f" % running_lowest_loss)
-	print("Model Parameters: ", running_best_params)
+	print("\nModel Parameters: ", running_best_params)
 	# write to a file too
-	with open(results_fname, 'w') as text_file:
+	with open(results_fname, 'a') as text_file:
 		text_file.write("\nBest Model Loss = %.3f" % running_lowest_loss)
 		text_file.write("\nModel Parameters: ", running_best_params)
 
@@ -98,15 +102,11 @@ def tune(num_epochs_arr, lr_arr):
 
 # hyperparameters
 num_epochs_arr = [5]
-lr_arr = [1e-1, 5e-2, 1e-2, 5e-3, 1e-3]
+lr_arr = [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
 
-with open(results_fname, 'w') as text_file:
-	text_file.write("HYPERPARAMETER TUNING with the following learning rates\n")
+with open(results_fname, 'a') as text_file:
+	text_file.write("\nHYPERPARAMETER TUNING with the following learning rates\n")
 	text_file.write(str(lr_arr))
-
-# hyperparameters
-num_epochs_arr = [5]
-lr_arr = [1e-1, 5e-2, 1e-2, 5e-3, 1e-3]
 
 train_loader = load()
 tune(num_epochs_arr, lr_arr)

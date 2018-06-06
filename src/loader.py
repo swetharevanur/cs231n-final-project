@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as f
 import torch.optim as optim
 import torchvision
-from torchvision import datasets, transforms
+from torchvision import datasets, transforms, models
 import VideoDataset
 from ConvAE import AutoEncoder
 
@@ -80,14 +80,26 @@ class DataLoader(object):
 		self.codes = [] # list of encoded images
 		self.labels = [] # associated labels
 
-	def load_data(self, data_path = '../data/'):
+	def load_data(self, mode = 'auto', data_path = '../data/'):
 		labels_fname = 'jackson-town-square-2017-12-14.csv'
 
 		# load model
-		model_fname = 'models/autoencoder.pth'
-		autoencoder = AutoEncoder()
-		autoencoder = torch.load(model_fname)
-		
+
+		if mode == 'auto':
+		    model_fname = 'models/autoencoder.pth'
+		    encoder = AutoEncoder()
+		    encoder = torch.load(model_fname)
+		elif mode == 'res18':
+		    encoder = models.resnet18(pretrained = True)
+		    encoder = nn.Sequential(*list(encoder.children())[:-1])
+		    encoder = encoder.to(device)
+		elif mode == 'res50':
+		    encoder = models.resnet50(pretrained = True)
+		    encoder = nn.Sequential(*list(encoder.children())[:-1])
+		    encoder = encoder.to(device)
+		else:
+		    raise Exception("Illegal parameter for mode")
+
 		# get unique frames with vehicles
 		vehicleFrames = getVehicleFrames(data_path + labels_fname)[0]
 		shuffle(vehicleFrames)
@@ -133,31 +145,47 @@ class DataLoader(object):
 				frameTensor = tform(frame)
 			frameTensor = frameTensor.unsqueeze_(0)
 			frameTensor = frameTensor.to(device = device, dtype = dtype)
-			code = autoencoder.encode(frameTensor)
-			self.codes.append(code)	
 
+			if mode == 'auto':
+			    # This is an autoencoder
+			    code = encoder.encode(frameTensor)
+			elif mode == 'res18':
+			    # This is a resnet_18
+			    code = encoder(frameTensor).squeeze(3).squeeze(2)
+			elif mode == 'res50':
+			    # This is a resnet_50
+			    code_50 = encoder(frameTensor).squeeze(3).squeeze(2)
+			    code_50 = code_50.view(1, 512, 4)	
+			    code = code_50.max(dim = 2, keepdim = False)[0]
+			else:
+			    raise Exception("Illegal parameter for mode but how did we even get here?")
+
+			# Codes should all be 512 now
+			self.codes.append(code)
+ 
 			# get labels associated with each frame
 			self.labels.append((vehicleType == 'car') - (vehicleType == 'truck')) # -1 is truck, 1 is car
-
+ 
 			numFramesLoaded += 1
 			if numFramesLoaded % 20 == 0:
 				print(numFramesLoaded, "frames successfully loaded out of", numFramesToLoad)	
 			if numFramesLoaded >= numFramesToLoad: break
-
+ 
 		# report vehicle statistics for class balancing
 		print("\nCar count:", carCount)
 		print("Truck count:", truckCount)
 		print(carCount - truckCount, "more cars than trucks.") 
-
+ 
 		# convert to encoded images and labels to tensors
 		codeMatrix = torch.stack(self.codes, 0)
 		labelTensor = torch.Tensor(self.labels)
-
+ 
 		# split dataset into train, val, test
 		train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
 			train_ground, val_ground, test_ground = split_data(codeMatrix, labelTensor)
-	
+
+		# return split_data(codeMatrix, labelTensor)
 		return train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
-			np.array(train_ground), np.array(val_ground), np.array(test_ground)
+			np.array(train_ground), np.array(val_ground), np.array(test_ground), mode
 
 
