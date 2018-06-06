@@ -11,6 +11,7 @@ import torchvision
 from torchvision import datasets, transforms
 import VideoDataset
 from ConvAE import AutoEncoder
+import os
 
 # using gpu
 USE_GPU = True
@@ -21,12 +22,15 @@ if USE_GPU and torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-print('using device:', device)	
+print('Using device:', device)	
 
 IMAGE_WIDTH = 224 # 1920
 IMAGE_HEIGHT = 224 # 1080
 NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
+
+results_fname = 'models/results/conv_autoencoder_experiments.txt'
+os.remove(results_fname)
 
 # load data
 def load(fname = '../../jackson-clips'):
@@ -40,7 +44,7 @@ def load(fname = '../../jackson-clips'):
 # instantiate model
 def create_model(lr):
 	autoencoder = AutoEncoder()
-	autoencoder = autoencoder.cuda()
+	autoencoder = autoencoder.to(device = device)
 	loss_fn = nn.BCELoss()
 	optimizer_cls = optim.Adam
 	optimizer = optimizer_cls(autoencoder.parameters(), lr = lr)
@@ -57,7 +61,7 @@ def train_model(autoencoder, loss_fn, optimizer, num_epochs):
 			loss = loss_fn(out, images)
 			loss.backward()
 			optimizer.step()
-	print("Loss = %.3f" % loss.data[0])
+	print("Loss = %.3f" % loss.data[0])	
 	return loss.data[0]
 
 # hyperparameter sweep
@@ -69,8 +73,14 @@ def tune(num_epochs_arr, lr_arr):
 	for num_epochs in num_epochs_arr:
 		for lr in lr_arr:
 			autoencoder, loss_fn, optimizer = create_model(lr)
-			print('\nlr:', lr)
+			
+			print('\nLearning Rate:', lr)
 			loss = train_model(autoencoder, loss_fn, optimizer, num_epochs)
+			# write to a file too
+			with open(results_fname, 'w') as text_file:
+				text_file.write("\nLearning Rate = %.3f" % lr)
+				text_file.write("\nLoss = %.3f" % loss)
+
 			if loss < running_lowest_loss:
 				running_lowest_loss = loss
 				running_best_model = autoencoder
@@ -78,12 +88,25 @@ def tune(num_epochs_arr, lr_arr):
 
 	print("\nBest Model Loss = %.3f" % running_lowest_loss)
 	print("Model Parameters: ", running_best_params)
+	# write to a file too
+	with open(results_fname, 'w') as text_file:
+		text_file.write("\nBest Model Loss = %.3f" % running_lowest_loss)
+		text_file.write("\nModel Parameters: ", running_best_params)
+
 	torch.save(running_best_model, 'models/autoencoder.pth')
 
 
 # hyperparameters
 num_epochs_arr = [5]
-lr_arr = [1e-3, 1e-4, 1e-5, 1e-6]
+lr_arr = [1e-1, 5e-2, 1e-2, 5e-3, 1e-3]
+
+with open(results_fname, 'w') as text_file:
+	text_file.write("HYPERPARAMETER TUNING with the following learning rates\n")
+	text_file.write(str(lr_arr))
+
+# hyperparameters
+num_epochs_arr = [5]
+lr_arr = [1e-1, 5e-2, 1e-2, 5e-3, 1e-3]
 
 train_loader = load()
 tune(num_epochs_arr, lr_arr)
