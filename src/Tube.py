@@ -11,13 +11,21 @@ class Tube():
 		self.rois = [] # list of regions of interest
 		self.pooled_rois = [] # RoIs after spatial max pooling across all frames
 		self.summary_frame = None
+		self.tube_pred_labels = []
+		self.tube_true_labels = []
+		self.pred_vehicle = None
+		self.true_vehicle = None
 
-	def populate(self, bb):
+
+	def populate(self, bb, weak_labels_fname):
 		frames_of_interest = bb.loc[bb['ind'] == self.id]
+
+		# load in Reef weak labels
+		weak_labels = np.load(weak_labels_fname)
 
 		# crop frames
 		bb_dims = ['xmin', 'ymin', 'xmax', 'ymax']
-		for index, frame in frames_of_interest.iterrows():
+		for _, frame in frames_of_interest.iterrows():
 			x_min, y_min, x_max, y_max = [frame[dim] for dim in bb_dims]
 
 			# read in frame of interest
@@ -27,10 +35,22 @@ class Tube():
 			ret, frame = video.read()
 			if ret == False: break # EOF reached
 
-			roi = frame[int(y_min):int(y_max), int(x_min):int(x_max)] # crop
+			# get weak label for frame
+			frameNum = frame['frame']
+			self.tube_pred_labels.append(weak_labels[frameNum])
+
+			# get true label for frame
+			self.tube_true_labels.append(frame['object_name'])
+
+			# crop
+			roi = frame[int(y_min):int(y_max), int(x_min):int(x_max)]
 			self.rois.append(roi)
 
 		video.release()
+
+		# assign majority label to tube
+		self.pred_vehicle = max(set(self.tube_pred_labels), key = self.tube_pred_labels.count)
+		self.true_vehicle = max(set(self.tube_true_labels), key = self.tube_true_labels.count)
 
 	def display(self):
 		for frame in self.rois:
@@ -74,7 +94,6 @@ class Tube():
 
 			self.pooled_rois.append(padded_frame)
 
-
 	def temporal_pooling(self):
 		# stacks spatially max pooled frames
 		temp_pooled_frame = np.stack(self.pooled_rois, axis = 0)
@@ -82,7 +101,4 @@ class Tube():
 
 		temp_pooled_frame = temp_pooled_frame.max(axis = 0)
 		self.summary_frame = temp_pooled_frame
-
-
-
 
