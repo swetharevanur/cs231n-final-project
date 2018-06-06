@@ -1,6 +1,7 @@
 # Adapted from: https://gist.github.com/okiriza/16ec1f29f5dd7b6d822a0a3f2af39274
 
 import random
+import math
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -10,8 +11,9 @@ import torchvision
 from torchvision import datasets, transforms
 import VideoDataset
 from ConvAE import AutoEncoder
+import os
 
-# Using gpu
+# using gpu
 USE_GPU = True
 dtype = torch.float32
 
@@ -19,55 +21,92 @@ if USE_GPU and torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
-# device = torch.device('cpu')
 
-print('using device:', device)	
+print('Using device:', device)	
 
-IMAGE_WIDTH = 100 # 1920
-IMAGE_HEIGHT = 100 # 1080
+IMAGE_WIDTH = 224 # 1920
+IMAGE_HEIGHT = 224 # 1080
 NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
-# Hyperparameters
-code_size = 50
-num_epochs = 3
-batch_size = 128
-lr = 0.002
-optimizer_cls = optim.Adam
+results_fname = 'models/results/autoencoder_experiments.txt'
+# os.remove(results_fname)
 
-# Load data
-#transforms.Compose([
-#transforms.Resize(size=(270, 480)),
-#transforms.ToTensor()
-#])
-train_data = VideoDataset.VideoDataset(fname = '../../jackson-clips',transform=[transforms.ToTensor()])
-print("About to train_loader")
-train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers = 8, drop_last=True)
-# train_data = datasets.MNIST('~/data/mnist/', train=True , transform=transforms.ToTensor(), download = True)
-# test_data  = datasets.MNIST('~/data/mnist/', train=False, transform=transforms.ToTensor())
-# train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=batch_size, num_workers=4, drop_last=True)
+# load data
+def load(fname = '../../jackson-clips'):
+	print("Starting to load data.")
+	batch_size = 128
+	train_data = VideoDataset.VideoDataset(fname = fname, transform=[transforms.ToTensor()])
+	train_loader = torch.utils.data.DataLoader(train_data, shuffle = True, \
+	    batch_size = batch_size, num_workers = 8, drop_last = True)
+	return train_loader
 
-# Instantiate model
-autoencoder = AutoEncoder(code_size)
-loss_fn = nn.BCELoss()
-optimizer = optimizer_cls(autoencoder.parameters(), lr=lr)
+# instantiate model
+def create_model(lr):
+	autoencoder = AutoEncoder()
+	autoencoder = autoencoder.to(device = device)
+	loss_fn = nn.BCELoss()
+	optimizer_cls = optim.Adam
+	optimizer = optimizer_cls(autoencoder.parameters(), lr = lr)
+	return autoencoder, loss_fn, optimizer
 
-autoencoder = autoencoder.cuda()
-# Training loop
-for epoch in range(num_epochs):
-	print("Epoch %d" % epoch)
+# training model
+def train_model(autoencoder, loss_fn, optimizer, num_epochs):
+	for epoch in range(num_epochs):
+		print("Epoch %d" % epoch)
+		for i, (images, _) in enumerate(train_loader): # ignore image labels
+			images = images.to(device = device, dtype = dtype)
+			out, code = autoencoder(images)
+			optimizer.zero_grad()
+			loss = loss_fn(out, images)
+			loss.backward()
+			optimizer.step()
+		print("Epoch Loss = %.3f" % loss.data[0])
+	print("Loss = %.3f" % loss.data[0])	
+	return loss.data[0]
 
-	for i, (images, _) in enumerate(train_loader): # Ignore image labels
-		print(i)
-		images = images.to(device = device, dtype = dtype)
-		out, code = autoencoder(images)
-		optimizer.zero_grad()
-		loss = loss_fn(out, images)
-		loss.backward()
-		optimizer.step()
-		print("Loop Loss = %.3f" % loss.data[0])
-		
-	print("Loss = %.3f" % loss.data[0])
+# hyperparameter sweep
+def tune(num_epochs_arr, lr_arr):
+	running_lowest_loss = math.inf
+	running_best_model = None
+	running_best_params = None
 
-torch.save(autoencoder, 'models/autoencoder.pth')
+	for num_epochs in num_epochs_arr:
+		for lr in lr_arr:
+			autoencoder, loss_fn, optimizer = create_model(lr)
+			
+			print('\nLearning Rate:', lr)
+			loss = train_model(autoencoder, loss_fn, optimizer, num_epochs)
+			# write to a file too
+			with open(results_fname, 'a') as text_file:
+				text_file.write("\nLearning Rate = %.3f" % lr)
+				text_file.write("\nLoss = %.3f" % loss)
 
+			if loss < running_lowest_loss:
+				running_lowest_loss = loss
+				running_best_model = autoencoder
+				running_best_params = {'num_epochs': num_epochs, 'lr': lr}
+
+			torch.save(autoencoder, 'model/autoencoder_' + lr + '.pth')
+			del autoencoder
+
+	print("\nBest Model Loss = %.3f" % running_lowest_loss)
+	print("\nModel Parameters: ", running_best_params)
+	# write to a file too
+	with open(results_fname, 'a') as text_file:
+		text_file.write("\nBest Model Loss = %.3f" % running_lowest_loss)
+		text_file.write("\nModel Parameters: ", running_best_params)
+
+	torch.save(running_best_model, 'models/autoencoder.pth')
+
+
+# hyperparameters
+num_epochs_arr = [5]
+lr_arr = [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
+
+with open(results_fname, 'a') as text_file:
+	text_file.write("\nHYPERPARAMETER TUNING with the following learning rates\n")
+	text_file.write(str(lr_arr))
+
+train_loader = load()
+tune(num_epochs_arr, lr_arr)
