@@ -12,7 +12,7 @@ IMAGE_HEIGHT = 224 # 1080
 NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
-code_size = 100
+code_size = 512
 
 class AutoEncoder(nn.Module):
 	def __init__(self):
@@ -26,8 +26,8 @@ class AutoEncoder(nn.Module):
 		self.enc_linear_2 = nn.Linear(self.code_size*2, self.code_size)
 		
 		# Decoder specification
-		self.dec_linear_1 = nn.Linear(self.code_size, 160)
-		self.dec_linear_2 = nn.Linear(160, IMAGE_SIZE)
+		self.dec_linear_1 = nn.Linear(self.code_size, self.code_size * 4)
+		self.dec_linear_2 = nn.Linear(self.code_size * 4, IMAGE_SIZE)
 		
 	def forward(self, images):
 		# image size is now 224 x 224 (formerly 1920 x 1080)

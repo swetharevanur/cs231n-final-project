@@ -41,7 +41,7 @@ class VideoDataset(Dataset):
 		self.bb = pd.read_csv(self.bb_fname, header = 0)
 		self.bb = self.bb.drop_duplicates(subset = 'frame') # for ConvAE training purposes, only keep first BB for frame
 		self.frame_per_clip = 150
-		self.num_clips = 30 # 6490
+		self.num_clips = 50 # 6490
 		self.transform = transform
 
 	def extract_frame(self, index):
