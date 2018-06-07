@@ -42,8 +42,10 @@ def load(fname = '../../jackson-clips'):
 	return train_loader
 
 # instantiate model
-def create_model(lr):
+def create_model(lr, cont = False):
 	autoencoder = AutoEncoder()
+	if cont == True:
+		autoencoder = torch.load('models/epochs/autoencoder_new_epoch_optimized.pth')
 	autoencoder = autoencoder.to(device = device)
 	loss_fn = nn.BCELoss()
 	optimizer_cls = optim.Adam
@@ -83,7 +85,7 @@ def tune(num_epochs_arr, lr_arr):
 
 	for num_epochs in num_epochs_arr:
 		for lr in lr_arr:
-			autoencoder, loss_fn, optimizer = create_model(lr)
+			autoencoder, loss_fn, optimizer = create_model(lr, cont = False)
 
 			# print('\nLearning Rate:', lr)
 			loss = train_model(autoencoder, loss_fn, optimizer, num_epochs, save = True, running_lowest_loss=running_lowest_loss)

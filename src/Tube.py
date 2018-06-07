@@ -5,9 +5,6 @@ from operator import itemgetter
 import math
 import numpy as np
 
-# get frames of interest, this gets passed into reef
-
-
 class Tube():
 	def __init__(self, obj_id):
 		self.id = obj_id
@@ -18,6 +15,7 @@ class Tube():
 		self.tube_true_labels = []
 		self.pred_vehicle = None
 		self.true_vehicle = None
+		self.sampled_frames = []
 
 	def get_frames(self, bb):
 		return bb.loc[bb['ind'] == self.id]
@@ -28,15 +26,11 @@ class Tube():
 		video.set(1, frame_row['frame'])
 		return video.read()
 
-	def populate(self, bb, weak_labels_fname):
+	def populate(self, bb):
 		frames_of_interest = get_frames(self, bb)
 
-		# load in Reef weak labels
-		weak_labels = np.load(weak_labels_fname)
-		weak_labels = dict(np.ndenumerate(weak_labels))
-
-		# crop frames
 		bb_dims = ['xmin', 'ymin', 'xmax', 'ymax']
+		
 		for _, frame_row in frames_of_interest.iterrows():
 			x_min, y_min, x_max, y_max = [frame_row[dim] for dim in bb_dims]
 
@@ -47,9 +41,6 @@ class Tube():
 			# get weak label for frame
 			frameNum = frame_row['frame']
 
-			# weak_labels[frameNum] = 0.7449488454897198
-			self.tube_pred_labels.append(weak_labels[frameNum])
-
 			# get true label for frame
 			self.tube_true_labels.append(-1 if frame_row['object_name'] == 'truck' else 1)
 
@@ -58,10 +49,6 @@ class Tube():
 			self.rois.append((frameNum, roi))
 
 		video.release()
-
-		# assign majority label to tube
-		self.pred_vehicle = max(set(self.tube_pred_labels), key = self.tube_pred_labels.count)
-		self.true_vehicle = max(set(self.tube_true_labels), key = self.tube_true_labels.count)
 
 	def display(self):
 		for frame in self.rois:
@@ -77,7 +64,8 @@ class Tube():
 		for frame in self.rois:
 			frame_height, frame_width, frame_channel = frame.shape
 
-			# zero pad each frame so that they all have height/width that is a multiple of new_dim
+			# zero pad each frame so that they all have 
+			# height/width that is a multiple of new_dim
 			# multiple must be larger than frame dims
 			vert_pad = (frame_height // new_dim + 1)*new_dim - frame_height
 			horiz_pad = (frame_width // new_dim + 1)*new_dim - frame_width
@@ -113,11 +101,11 @@ class Tube():
 		temp_pooled_frame = temp_pooled_frame.max(axis = 0)
 		self.summary_frame = temp_pooled_frame
 
-	def label(self):
-		# assign majority label to tube
-	    print(self.tube_pred_labels)
-	    self.pred_vehicle = -1 if sum(self.tube_pred_labels)/self.numFrames < 0.5 else 1
-	    self.true_vehicle = max(set(self.tube_true_labels), key = self.tube_true_labels.count)
-	    print(self.pred_vehicle)
-	    print(self.true_vehicle)
-
+	def assign_label(self, weak_train_dict):
+		for frame_num in self.sampled_frames:
+			if frame_num in weak_train_dict:
+				self.tube_pred_labels.append(weak_train_dict[frame_num])
+			else:
+				print("Frame", frame_num, "not found")
+		self.pred_vehicle = 0 if sum(self.tube_pred_labels)/len(self.sampled_frames) < 0.5 else 1
+		

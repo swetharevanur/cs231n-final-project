@@ -41,7 +41,12 @@ class HeuristicGenerator(object):
         """
 
         def marginals_to_labels(hf,X,beta):
-            marginals = hf.predict_proba(X)[:,1]
+            if hf.predict_proba(X).shape[1] != 1:
+                marginals = hf.predict_proba(X)[:,1]
+            else: # when it filters down to a dataset all from the same class
+            	marginals = np.zeros((hf.predict_proba(X)[:,0].shape[0],))
+            
+            # marginals = hf.predict_proba(X)[:,1]
             labels_cutoff = np.zeros(np.shape(marginals))
             labels_cutoff[marginals <= (self.b-beta)] = -1.
             labels_cutoff[marginals >= (self.b+beta)] = 1.
@@ -115,8 +120,10 @@ class HeuristicGenerator(object):
             primitive_matrix = self.val_primitive_matrix
             ground = self.val_ground
         else:
+            # idx = np.asarray(idx)
             primitive_matrix = self.val_primitive_matrix[idx,:]
-            ground = self.val_ground[idx]
+            # ground = self.val_ground[idx]
+            ground = [self.val_ground[index] for index in idx]
 
 
         #Generate all possible heuristics

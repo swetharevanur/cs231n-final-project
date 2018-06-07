@@ -18,7 +18,6 @@ from scipy import sparse
 from sklearn.feature_extraction.text import CountVectorizer
 
 import VideoDataset
-# from ConvAE import AutoEncoder
 from get_frames import getVehicleFrames
 
 USE_GPU = True
@@ -28,11 +27,12 @@ if USE_GPU and torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-def preprocess_bb(bb_fname = '../data/jackson-town-square-2017-12-14.csv', trunc_margin = 5):
+def preprocess_bb(trunc_margin, bb_fname = '../data/jackson-town-square-2017-12-14.csv'):
 	bb_raw = pd.read_csv(bb_fname, header = 0)
 	# remove objects that only appear in one frame
-	bb = bb_raw[bb_raw.groupby('ind').ind.transform(len) > trunc_margin]
+	bb = bb_raw[bb_raw.groupby('ind').ind.transform(len) >= trunc_margin]
 	return bb
+
 
 def preprocess_frame(bb, frameNum, frame):
 	bb_dims = ['xmin', 'ymin', 'xmax', 'ymax']
@@ -42,8 +42,8 @@ def preprocess_frame(bb, frameNum, frame):
 	frame = frame[int(y_min):int(y_max), int(x_min):int(x_max), :]
 	# resize frame
 	frame = VideoDataset.resize_frame(frame)
-	print(frame.shape)
 	return frame
+
 
 def frame2tensor(frame):
 	# set up tensor to store encoded frames
@@ -54,18 +54,16 @@ def frame2tensor(frame):
 		frameTensor = frameTensor.to(device = device, dtype = dtype)
 	return frameTensor
 
+
 def init_encoder(mode):
 	# load model
-	'''
 	if mode == 'auto':
 		model_fname = 'models/autoencoder_0.0001.pth'
 		encoder = AutoEncoder()
 		encoder = torch.load(model_fname)
 		for param in encoder.parameters():
 			param.requires_grad = False
-	el
-	'''
-	if mode == 'res18':
+	elif mode == 'res18':
 		encoder = models.resnet18(pretrained = True)
 		encoder = nn.Sequential(*list(encoder.children())[:-1])
 		encoder = encoder.to(device)
@@ -81,7 +79,6 @@ def init_encoder(mode):
 			param.requires_grad = False
 	else:
 		raise Exception("Illegal parameter for mode")
-	
 	return encoder
 
 
