@@ -10,7 +10,7 @@ import torch.optim as optim
 import torchvision
 from torchvision import datasets, transforms
 import VideoDataset
-from ConvAE import AutoEncoder
+from ConvAE import Flatten, Unflatten, AutoEncoder
 import os
 
 # using gpu
@@ -29,7 +29,7 @@ IMAGE_HEIGHT = 224 # 1080
 NUM_CHANNELS = 3
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * NUM_CHANNELS
 
-results_fname = 'models/results/autoencoder_experiments.txt'
+results_fname = 'models/results/autoencoder_new_epoch_exps.txt'
 # os.remove(results_fname)
 
 # load data
@@ -51,7 +51,7 @@ def create_model(lr):
 	return autoencoder, loss_fn, optimizer
 
 # training model
-def train_model(autoencoder, loss_fn, optimizer, num_epochs):
+def train_model(autoencoder, loss_fn, optimizer, num_epochs, save, running_lowest_loss):
 	for epoch in range(num_epochs):
 		print("Epoch %d" % epoch)
 		for i, (images, _) in enumerate(train_loader): # ignore image labels
@@ -61,8 +61,18 @@ def train_model(autoencoder, loss_fn, optimizer, num_epochs):
 			loss = loss_fn(out, images)
 			loss.backward()
 			optimizer.step()
-		print("Epoch Loss = %.3f" % loss.data[0])
-	print("Loss = %.3f" % loss.data[0])	
+		print("Epoch Loss = %.5f" % loss.data[0])
+		with open(results_fname, 'a') as text_file:
+			text_file.write("\nEpoch = %d" % epoch)
+			text_file.write("\nEpoch Loss = %.5f" % loss.data[0])
+
+		# save intermediate models
+		if save:
+			if loss.data[0] < running_lowest_loss:
+				running_lowest_loss = loss
+				torch.save(autoencoder, 'models/epochs/autoencoder_new_epoch_optimized.pth')
+
+	print("Final Loss = %.5f" % loss.data[0])	
 	return loss.data[0]
 
 # hyperparameter sweep
@@ -74,39 +84,42 @@ def tune(num_epochs_arr, lr_arr):
 	for num_epochs in num_epochs_arr:
 		for lr in lr_arr:
 			autoencoder, loss_fn, optimizer = create_model(lr)
-			
-			print('\nLearning Rate:', lr)
-			loss = train_model(autoencoder, loss_fn, optimizer, num_epochs)
+
+			# print('\nLearning Rate:', lr)
+			loss = train_model(autoencoder, loss_fn, optimizer, num_epochs, save = True, running_lowest_loss=running_lowest_loss)
 			# write to a file too
-			with open(results_fname, 'a') as text_file:
-				text_file.write("\nLearning Rate = %.3f" % lr)
-				text_file.write("\nLoss = %.3f" % loss)
+			# with open(results_fname, 'a') as text_file:
+			# 	text_file.write("\nLearning Rate = %.5f" % lr)
+			# 	text_file.write("\nLoss = %.5f" % loss)
 
-			if loss < running_lowest_loss:
-				running_lowest_loss = loss
-				running_best_model = autoencoder
-				running_best_params = {'num_epochs': num_epochs, 'lr': lr}
+			# if loss < running_lowest_loss:
+			#	running_lowest_loss = loss
+			#	running_best_model = autoencoder
+			#	running_best_params = {'num_epochs': num_epochs, 'lr': lr}
+			
+			torch.save(autoencoder, 'models/autoencoder_new_fully_trained.pth')
 
-			torch.save(autoencoder, 'model/autoencoder_' + lr + '.pth')
+
 			del autoencoder
 
-	print("\nBest Model Loss = %.3f" % running_lowest_loss)
-	print("\nModel Parameters: ", running_best_params)
+	# print("\nBest Model Loss = %.5f" % running_lowest_loss)
+	# print("\nModel Parameters: ", running_best_params)
 	# write to a file too
-	with open(results_fname, 'a') as text_file:
-		text_file.write("\nBest Model Loss = %.3f" % running_lowest_loss)
-		text_file.write("\nModel Parameters: ", running_best_params)
+	# with open(results_fname, 'a') as text_file:
+	#	text_file.write("\n\nBest Model Loss = %.5f" % running_lowest_loss)
+	#	text_file.write("\nModel Parameters: %.5f" % running_best_params)
 
-	torch.save(running_best_model, 'models/autoencoder.pth')
+	# torch.save(running_best_model, 'models/autoencoder_fully_trained.pth')
 
 
 # hyperparameters
-num_epochs_arr = [5]
-lr_arr = [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]
+num_epochs_arr = [30]
+lr_arr = [1e-4]
+# lr_arr = [5e-4, 1e-4, 1e-3, 5e-5, 1e-5]
 
 with open(results_fname, 'a') as text_file:
-	text_file.write("\nHYPERPARAMETER TUNING with the following learning rates\n")
-	text_file.write(str(lr_arr))
+	text_file.write("Tracking epoch loss for autoencoder with 1e-4 learning rate\n")
+	# text_file.write(str(lr_arr))
 
 train_loader = load()
 tune(num_epochs_arr, lr_arr)

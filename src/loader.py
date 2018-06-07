@@ -15,13 +15,13 @@ import torch.nn.functional as f
 import torch.optim as optim
 import torchvision
 from torchvision import datasets, transforms, models
-import VideoDataset
-from ConvAE import AutoEncoder
-
 from scipy import sparse
 from sklearn.feature_extraction.text import CountVectorizer
 
+import VideoDataset
+from ConvAE import AutoEncoder
 from get_frames import getVehicleFrames
+from loader_utils import *
 
 USE_GPU = True
 dtype = torch.float32
@@ -39,7 +39,7 @@ def parse_file(filename):
 			frameLabels.append(frame[1]) # frame[0] is frame number, frame[1] is label
 	return frameLabels
 
-def split_data(X, y):
+def split_data(X, y, frameNums):
 	np.random.seed(1234)
 	num_sample = np.shape(X)[0]
 
@@ -53,8 +53,11 @@ def split_data(X, y):
 	y_test = y[0:num_test]
 	y_train = y[num_test:]
 
-	# split train into train/val (20/80 because meanings swapped in Reef)
-	num_val = 4 * num_train // 5
+	frameNums_test = frameNums[0:num_test]
+	frameNums_train = frameNums[num_test:]
+
+	# split train into train/val (80/20)
+	num_val = num_train // 5
 
 	train_inds = np.arange(num_train)
 	random.shuffle(train_inds)
@@ -65,13 +68,14 @@ def split_data(X, y):
 	X_tr = X_train[train_inds]
 	y_tr = y_train[train_inds]
 
+	frameNums_tr = frameNums_train[train_inds]
+
 	X_tr = torch.squeeze(X_tr, 1)
 	X_val = torch.squeeze(X_val, 1)
 	X_test = torch.squeeze(X_test, 1)
 
 	return np.array(X_tr.detach()), np.array(X_val.detach()), np.array(X_test.detach()), \
-		np.array(y_tr), np.array(y_val), np.array(y_test)
-
+		np.array(y_tr), np.array(y_val), np.array(y_test), np.array(frameNums_tr)
 
 class DataLoader(object):
 	""" A class to load in appropriate numpy arrays
@@ -80,42 +84,55 @@ class DataLoader(object):
 		self.codes = [] # list of encoded images
 		self.labels = [] # associated labels
 
-	def load_data(self, mode = 'auto', data_path = '../data/'):
+	def load_data(self, mode = 'auto', data_path = '../data/', numFramesToLoad = 1000, need_split = True):
 		labels_fname = 'jackson-town-square-2017-12-14.csv'
 
-		# load model
+		
 
+		# load model
+		# encoder = init_encoder(mode)
 		if mode == 'auto':
-		    model_fname = 'models/autoencoder.pth'
+		    model_fname = 'models/autoencoder_0.0001.pth'
 		    encoder = AutoEncoder()
 		    encoder = torch.load(model_fname)
+		    for param in encoder.parameters():
+			    param.requires_grad = False
 		elif mode == 'res18':
 		    encoder = models.resnet18(pretrained = True)
 		    encoder = nn.Sequential(*list(encoder.children())[:-1])
 		    encoder = encoder.to(device)
+		    # turn off intermediate state saving
+		    for param in encoder.parameters():
+			    param.requires_grad = False
 		elif mode == 'res50':
 		    encoder = models.resnet50(pretrained = True)
 		    encoder = nn.Sequential(*list(encoder.children())[:-1])
 		    encoder = encoder.to(device)
+		    # turn off intermediate state saving
+		    for param in encoder.parameters():
+			    param.requires_grad = False
 		else:
 		    raise Exception("Illegal parameter for mode")
+		
 
+		
 		# get unique frames with vehicles
 		vehicleFrames = getVehicleFrames(data_path + labels_fname)[0]
 		shuffle(vehicleFrames)
 
+		# bb = preprocess_bb()
 		bb = pd.read_csv(data_path + labels_fname, header = 0)
 		bb_dims = ['xmin', 'ymin', 'xmax', 'ymax']
-
+		
 		video_fname = '../../jackson-clips'
 		video = swag.VideoCapture(video_fname)
 
 		carCount = 0
 		truckCount = 0
 		margin = 5
-		numFramesToLoad = 1000
 		numFramesLoaded = 0
 
+		frameNums = np.empty((0))
 		for frameIter in range(len(vehicleFrames)):
 			frameNum = vehicleFrames[frameIter] # frame number as it appears in BB dataset
 
@@ -133,19 +150,34 @@ class DataLoader(object):
 			video.set(1, frameNum)
 			ret, frame = video.read()
 			if ret == False: break # EOF reached
+			
+			# crop and resize frame
+			# frame = preprocess_frame(bb, frameNum, frame)
+			# print(frame.shape)
+				
+			
 			# crop frame
 			x_min, y_min, x_max, y_max = [bb.loc[bb['frame'] == frameNum][dim].tolist()[0] for dim in bb_dims]
+			# print(x_min, y_min, x_max, y_max)
 			frame = frame[int(y_min):int(y_max), int(x_min):int(x_max), :]
+			# print(frame.shape)
 			# resize frame
 			frame = VideoDataset.resize_frame(frame)
+			# print(frame.shape)
+			
 
 			# use autoencoder to generate 1D code from 3D image
+			# frameTensor = frame2tensor(frame)
+			
 			transform = [transforms.ToTensor()]
 			for tform in transform: # convert to tensor
 				frameTensor = tform(frame)
 			frameTensor = frameTensor.unsqueeze_(0)
 			frameTensor = frameTensor.to(device = device, dtype = dtype)
+			
 
+			# encode
+			# code = encode(encoder, frameTensor, mode)
 			if mode == 'auto':
 			    # This is an autoencoder
 			    code = encoder.encode(frameTensor)
@@ -167,8 +199,9 @@ class DataLoader(object):
 			self.labels.append((vehicleType == 'car') - (vehicleType == 'truck')) # -1 is truck, 1 is car
  
 			numFramesLoaded += 1
-			if numFramesLoaded % 20 == 0:
-				print(numFramesLoaded, "frames successfully loaded out of", numFramesToLoad)	
+			frameNums = np.append(frameNums, frameNum)
+			# if numFramesLoaded % 20 == 0:
+			print(numFramesLoaded, "frames successfully loaded out of", numFramesToLoad)	
 			if numFramesLoaded >= numFramesToLoad: break
  
 		# report vehicle statistics for class balancing
@@ -180,12 +213,14 @@ class DataLoader(object):
 		codeMatrix = torch.stack(self.codes, 0)
 		labelTensor = torch.Tensor(self.labels)
  
-		# split dataset into train, val, test
-		train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
-			train_ground, val_ground, test_ground = split_data(codeMatrix, labelTensor)
+		if need_split == True:
+			# split dataset into train, val, test
+			train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
+				train_ground, val_ground, test_ground, frameNums_train = split_data(codeMatrix, labelTensor, frameNums)
 
-		# return split_data(codeMatrix, labelTensor)
-		return train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
-			np.array(train_ground), np.array(val_ground), np.array(test_ground), mode
-
+			return train_primitive_matrix, val_primitive_matrix, test_primitive_matrix, \
+				np.array(train_ground), np.array(val_ground), np.array(test_ground), mode, frameNums_train
+		else:
+			return _, codeMatrix, _, \
+				_, np.array(labelTensor), _, mode, frameNums
 
