@@ -8,9 +8,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 from torchvision import datasets, transforms
+import numpy as np
+np.random.seed(695)
+import csv
+
 import VideoDataset
 import ClassifierLoader
-import numpy as np
 from process_tubes import NUM_FRAMES_PER_TUBE
 
 USE_GPU = True
@@ -54,29 +57,40 @@ class CNNClassifier(nn.Module):
 		code = code.view([tube.size(0), -1])
 		code = F.relu(self.linear_1(code))
 		code = self.linear_2(code)
-		return F.sigmoid(code)
+		return F.softmax(code)
 
-def check_accuracy(loader_val, model):
+def retrieve_metrics(loader, model):
 	num_correct = 0
 	num_samples = 0
 	model.eval()  # set model to evaluation mode
+
+	scores_arr = []#torch.Tensor((0, 2))
+	y_arr = []
+
 	with torch.no_grad():
-		# insert loader line here
-		for _, (x, y) in enumerate(loader_val):
+		for _, (x, y) in enumerate(loader):
 			x = x.unsqueeze_(1)
 			x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
 			y = y.to(device=device, dtype=torch.long)
 			scores = model(x)
+			scores_arr = scores_arr + list(scores[:, 0].cpu().numpy())
+			y_arr += list(y.cpu().numpy())
 			_, preds = scores.max(1)
 			num_correct += (preds == y).sum()
 			num_samples += preds.size(0)
 	acc = float(num_correct) / num_samples
-	print('Classified %d / %d correctly (%.2f)' % (num_correct, num_samples, 100 * acc))
+	# print('Val accuracy: %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
+
+	# print(scores_arr.permute(0, 1)[:, 0].data)
+
+	return scores_arr, y_arr, acc
 
 # training model
 def train_model(loader_train, loader_val, model, optimizer, results_fname, running_lowest_loss, lr, num_epochs = 10):
+	loss_history = []
+	
 	for epoch in range(num_epochs):
-		print("Epoch %d" % epoch)
+		# print("\nEpoch %d" % epoch)
 		for i, (x, y) in enumerate(loader_train): # ignore image labels
 			x = x.unsqueeze_(1)
 			x = x.to(device = device, dtype = dtype)
@@ -86,91 +100,76 @@ def train_model(loader_train, loader_val, model, optimizer, results_fname, runni
 			loss = F.cross_entropy(scores, y.long())
 			loss.backward()
 			optimizer.step()
-		print("Epoch Loss = %.5f" % loss.data[0])
+		# print("Epoch %d Train Loss = %.5f" % (epoch,loss.data[0]))
 		with open(results_fname, 'a') as text_file:
 			text_file.write("\nEpoch = %d" % epoch)
-			text_file.write("\nEpoch Loss = %.5f" % loss.data[0])
-		check_accuracy(loader_val, model)
-
-
+			text_file.write("\nEpoch Train Loss = %.5f" % loss.data[0])
+			
 		# save intermediate models
 		if loss.data[0] < running_lowest_loss:
 			running_lowest_loss = loss
 			torch.save(model, 'models/epochs/classifier_' + str(lr) + '_epoch_optimized.pth')
 
-	print("Final Loss = %.5f" % loss.data[0])	
-	return loss.data[0]
+		loss_history.append(float(loss.data[0]))
+	# print("Final Loss = %.5f" % loss.data[0])	
+	return loss_history
 
 
-'''
-def train_model(loader_train, loader_val, model, optimizer, lr, epochs = 10):
-	# model = model.to(device=device)  # move the model parameters to CPU/GPU
-	running_lowest_loss = np.inf
-	for e in range(epochs):
-		# insert loader code
-		for _, (x, y) in enumerate(loader_train):
-			model.train()  # put model to training mode
-			x = x.unsqueeze_(1)
-			x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
-			y = y.to(device=device, dtype=torch.long)
-			scores = model(x)
-			loss = F.cross_entropy(scores, y) # this works fine, also could use score for wrong class
-			# zero out all of the gradients for the variables which the optimizer
-			# will update.
-			optimizer.zero_grad()
-			# this is the backwards pass: compute the gradient of the loss with
-			# respect to each  parameter of the model.
-			loss.backward()
-			# actually update the parameters of the model using the gradients
-			# computed by the backwards pass.
-			optimizer.step()
-		print('Epoch %d, loss = %.4f' % (e, loss.item()))
-		with open(results_fname, 'a') as text_file:
-			text_file.write("\nEpoch = %d" % epoch)
-			text_file.write("\nEpoch Loss = %.5f" % loss.data[0])
-		check_accuracy(x_val, y_val, model)
-		print()
-
-		if loss.data[0] < running_lowest_loss:
-			running_lowest_loss = loss
-			torch.save(model, 'models/epochs/classifier_' + lr + '_epoch_optimized.pth')
-
-	del model
-	return(loss.item())
-'''
-
-def create_model(loader_train, loader_val, results_fname, epochs = 10, learning_rate = 0.001):
+def create_model(loader_train, loader_val, loader_test, results_fname, epochs = 10, learning_rate = 0.001):
 	print_every = 1
 	model = CNNClassifier()
 	model.to(device = device)
 	optimizer = optim.Adam(model.parameters(), lr = learning_rate) # SGD or Adam?
-	loss = train_model(loader_train, loader_val, model, optimizer, results_fname, np.inf, lr = learning_rate,  num_epochs = epochs)
-	return loss
+	loss_history = train_model(loader_train, loader_val, model, optimizer, results_fname, np.inf, lr = learning_rate,  num_epochs = epochs)
+	return loss_history, retrieve_metrics(loader_val, model), retrieve_metrics(loader_test, model)
 
-def load(train_primitive_matrix, train_tubes, val_primitive_matrix, val_tubes):
+def load(train_primitive_matrix, train_tubes, val_primitive_matrix, val_tubes, test_primitive_matrix, test_tubes):
 	batch_size = 128
 
-	train_data = ClassifierLoader.ClassifierLoader(train_primitive_matrix, train_tubes, 'train', NUM_FRAMES_PER_TUBE)
+	train_data = ClassifierLoader.ClassifierLoader(train_primitive_matrix, train_tubes, NUM_FRAMES_PER_TUBE)
 	loader_train = torch.utils.data.DataLoader(train_data, shuffle = True, \
 		num_workers = 0, batch_size = batch_size)
+	print(len(train_data), "examples in train set")
 
-	val_data = ClassifierLoader.ClassifierLoader(val_primitive_matrix, val_tubes, 'val', NUM_FRAMES_PER_TUBE)
+
+	val_data = ClassifierLoader.ClassifierLoader(val_primitive_matrix, val_tubes, NUM_FRAMES_PER_TUBE)
 	loader_val = torch.utils.data.DataLoader(val_data, shuffle = True, \
 		num_workers = 0, batch_size = batch_size)
+	print(len(val_data), "examples in validation set")
 
-	return loader_train, loader_val
+	test_data = ClassifierLoader.ClassifierLoader(test_primitive_matrix, test_tubes, NUM_FRAMES_PER_TUBE)
+	loader_test = torch.utils.data.DataLoader(test_data, shuffle = True, \
+		num_workers = 0, batch_size = batch_size)
+	print(len(test_data), "examples in test set")
+
+	return loader_train, loader_val, loader_test
 
 
 # hyperparameter sweeps with different learning rates
-def tune(train_primitive_matrix, train_tubes, val_primitive_matrix, val_tubes):
+def tune(train_primitive_matrix, train_tubes, val_primitive_matrix, val_tubes, test_primitive_matrix, test_tubes, lr_arr, weak_volume):
 	results_fname = 'models/results/classifier_epoch_exps.txt'
-	lr_arr = [1e-2, 1e-3, 1e-4, 1e-5]
 
-	loader_train, loader_val = load(train_primitive_matrix, train_tubes, val_primitive_matrix, val_tubes)
-	
+	metrics_fname = 'models/results/classifier_metrics.txt'
+	# lr_arr = [1e-5, 1e-4, 1e-3, 1e-2]
+
+	loader_train, loader_val, loader_test = load(train_primitive_matrix, train_tubes, val_primitive_matrix, val_tubes, test_primitive_matrix, test_tubes)
+
+	lr_metrics = {}
 	for lr in lr_arr:
-		loss = create_model(loader_train, loader_val, results_fname, epochs = 10, learning_rate = lr)
-		print('Learning Rate = %.5f, loss = %.4f' % (lr, loss))
+		loss_history, (scores_arr, y_arr, val_acc), (_, _, test_acc) = create_model(loader_train, loader_val, loader_test, results_fname, epochs = 100, learning_rate = lr)
+	
+		with open(metrics_fname, 'a') as text_file:
+			text_file.write("\nweak_volume = %d" % weak_volume)
+			text_file.write("\nlr = %.5f\n" % lr)
+			text_file.write(str(loss_history))
+			text_file.write(str(scores_arr))
+			text_file.write(str(y_arr))
+			text_file.write(str(val_acc))
+		                            
+		print('Learning Rate = %.5f, loss = %.5f, valacc = %.3f' % (lr, loss_history[-1], val_acc))
+		lr_metrics[lr] = loss_history, scores_arr, y_arr, val_acc, test_acc
+
+	return lr_metrics 
 
 # no need-we already have check_accuracy
 # def test_model(x_test, y_test, model):

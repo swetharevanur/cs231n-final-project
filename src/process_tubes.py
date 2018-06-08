@@ -32,7 +32,7 @@ def get_objects(num_objects = (30, 300, 70)):
 		obj_remove = np.random.choice(vehicle_frames['car'], diff, replace = False)
 	elif car_count < truck_count: # pop from truck
 		diff = truck_count - car_count
-		obj_remove = np.random.choice(vehicle_frames['car'], diff, replace = False)
+		obj_remove = np.random.choice(vehicle_frames['truck'], diff, replace = False)
 	obj_ids = list(set(obj_ids) - set(obj_remove))
 
 	# randomly sample objects

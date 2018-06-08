@@ -58,7 +58,8 @@ def frame2tensor(frame):
 def init_encoder(mode):
 	# load model
 	if mode == 'auto':
-		model_fname = 'models/autoencoder_0.0001.pth'
+		# model_fname = 'models/autoencoder_0.0001.pth'
+		model_fname = 'models/epochs/autoencoder_new_epoch_optimized.pth'
 		encoder = AutoEncoder()
 		encoder = torch.load(model_fname)
 		for param in encoder.parameters():

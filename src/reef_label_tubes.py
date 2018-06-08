@@ -1,4 +1,5 @@
 import numpy as np
+np.random.seed(695)
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("ignore")
@@ -33,9 +34,9 @@ def reef_label(train_primitive_matrix, val_primitive_matrix, val_ground, train_g
 						
 		#Repeat synthesize-prune-verify at each iterations
 		if i == 3:
-			hg.run_synthesizer(max_cardinality=1, idx=idx, keep=3, model='dt')
+			hg.run_synthesizer(max_cardinality=1, idx=idx, keep=3, model='nn')
 		else:
-			hg.run_synthesizer(max_cardinality=1, idx=idx, keep=1, model='dt')
+			hg.run_synthesizer(max_cardinality=1, idx=idx, keep=1, model='nn')
 		hg.run_verifier()
 												
 		#Save evaluation metrics
