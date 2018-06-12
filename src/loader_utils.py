@@ -16,7 +16,7 @@ import torchvision
 from torchvision import datasets, transforms, models
 from scipy import sparse
 from sklearn.feature_extraction.text import CountVectorizer
-
+import ConvAE
 import VideoDataset
 from get_frames import getVehicleFrames
 
