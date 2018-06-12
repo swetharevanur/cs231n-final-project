@@ -11,6 +11,7 @@ class Tube():
 		self.rois = [] # list of regions of interest
 		self.pooled_rois = [] # RoIs after spatial max pooling across all frames
 		self.summary_frame = None
+		self.numFrames = 0
 		self.tube_pred_labels = []
 		self.tube_true_labels = []
 		self.pred_vehicle = None
@@ -25,32 +26,32 @@ class Tube():
 
 		# crop frames
 		bb_dims = ['xmin', 'ymin', 'xmax', 'ymax']
-		for _, frame in frames_of_interest.iterrows():
-			x_min, y_min, x_max, y_max = [frame[dim] for dim in bb_dims]
+		for _, frame_row in frames_of_interest.iterrows():
+			x_min, y_min, x_max, y_max = [frame_row[dim] for dim in bb_dims]
 
 			# read in frame of interest
 			fname = '../../jackson-clips'
 			video = swag.VideoCapture(fname)
-			video.set(1, frame['frame'])
+			video.set(1, frame_row['frame'])
 			ret, frame = video.read()
 			if ret == False: break # EOF reached
 
 			# get weak label for frame
-			frameNum = frame['frame']
+			frameNum = frame_row['frame']
+			print(frameNum)
+			print(weak_labels)
 			self.tube_pred_labels.append(weak_labels[frameNum])
 
 			# get true label for frame
-			self.tube_true_labels.append(frame['object_name'])
+			self.tube_true_labels.append(-1 if frame_row['object_name'] == 'truck' else 1)
 
 			# crop
 			roi = frame[int(y_min):int(y_max), int(x_min):int(x_max)]
 			self.rois.append(roi)
 
-		video.release()
+			self.numFrames += 1
 
-		# assign majority label to tube
-		self.pred_vehicle = max(set(self.tube_pred_labels), key = self.tube_pred_labels.count)
-		self.true_vehicle = max(set(self.tube_true_labels), key = self.tube_true_labels.count)
+		video.release()
 
 	def display(self):
 		for frame in self.rois:
@@ -101,4 +102,10 @@ class Tube():
 
 		temp_pooled_frame = temp_pooled_frame.max(axis = 0)
 		self.summary_frame = temp_pooled_frame
+
+	def label(self):
+		# assign majority label to tube
+		print(self.tube_pred_labels)
+		self.pred_vehicle = -1 if sum(self.tube_pred_labels)/self.numFrames < 0.5 else 1
+		self.true_vehicle = max(set(self.tube_true_labels), key = self.tube_true_labels.count)
 
